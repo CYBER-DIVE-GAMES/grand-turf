@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#05070f">
+<title>GRAND TURF</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;background:#05070f;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#unity-canvas{position:fixed;top:env(safe-area-inset-top,0);left:env(safe-area-inset-left,0);width:calc(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px));height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:block;background:#05070f}
+#loader{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1a1430 0%,#05070f 70%);z-index:5;transition:opacity .6s}
+#loader img{width:min(70vw,640px);filter:drop-shadow(0 0 24px rgba(255,190,80,.45))}
+#bar{width:min(60vw,520px);height:10px;border-radius:5px;background:rgba(255,255,255,.12);margin-top:28px;overflow:hidden}
+#fill{height:100%;width:0;background:linear-gradient(90deg,#ffb440,#ffe9a0);box-shadow:0 0 12px #ffc860}
+#msg{color:#c8cde0;font:600 14px/1.6 sans-serif;margin-top:14px;letter-spacing:.1em}
+#err{color:#ff8080;font:14px sans-serif;margin-top:12px;max-width:80vw;text-align:center}
+#gt-rotate{display:none;position:fixed;inset:0;z-index:50;background:#05070f;color:#fff;font:700 20px/1.6 sans-serif;align-items:center;justify-content:center;text-align:center;padding:24px}
+#gt-rotate b{display:block;font-size:52px;color:#e0b850;line-height:1.3}
+@media (orientation:portrait) and (max-width:900px){#gt-rotate{display:flex}}
+</style>
+</head>
+<body>
+<canvas id="unity-canvas" tabindex="-1"></canvas>
+<div id="loader"><img src="logo.png" alt="GRAND TURF"><div id="bar"><div id="fill"></div></div><div id="msg">LOADING…</div><div id="err"></div></div>
+<div id="gt-rotate"><div><b>&#8635;</b>スマホを横向きにしてください<br>このゲームは横画面で遊べます</div></div>
+<script>
+// Unity の音声解除は touchstart のみで、ブラウザが再生許可に数えない場合があるので、指を離した時にも再開する
+(function(){
+  var A=window.AudioContext||window.webkitAudioContext; if(!A) return; var list=[];
+  var W=class extends A{ constructor(o){ super(o); list.push(this); } };
+  window.AudioContext=W; window.webkitAudioContext=W;
+  function resume(){ if(document.hidden) return; list.forEach(function(c){ if(c.state!=='running'&&c.state!=='closed') c.resume().catch(function(){}); }); }
+  ['touchend','pointerup','click','keydown'].forEach(function(t){ window.addEventListener(t,resume,{passive:true}); });
+  document.addEventListener('visibilitychange',function(){ if(document.hidden) list.forEach(function(c){ if(c.state==='running') c.suspend().catch(function(){}); }); else resume(); });
+})();
+// iOS/Android の音声合成は最初のタッチ内で一度呼ぶ必要がある
+(function(){
+  var primed=false;
+  function prime(){
+    if(primed)return; primed=true;
+    // Android は全画面と横向き固定を試す（iOS Safari は非対応なので案内表示のまま）
+    try{ if(/Android/i.test(navigator.userAgent) && document.documentElement.requestFullscreen){ document.documentElement.requestFullscreen().then(function(){ if(screen.orientation&&screen.orientation.lock) return screen.orientation.lock('landscape'); }).catch(function(){}); } }catch(e){}
+    try{ if(window.speechSynthesis){ var u=new SpeechSynthesisUtterance(' '); u.volume=0; u.lang='ja-JP'; speechSynthesis.speak(u); } }catch(e){}
+  }
+  ['touchend','mousedown','keydown'].forEach(function(t){ window.addEventListener(t,prime,{passive:true}); });
+  if(window.speechSynthesis && speechSynthesis.onvoiceschanged!==undefined){ speechSynthesis.onvoiceschanged=function(){ speechSynthesis.getVoices(); }; }
+})();
+var canvas=document.querySelector('#unity-canvas');
+// 描画が失われたら案内して再読み込み（進行はセーブ済み）
+function gtFail(t,reload){ var e=document.getElementById('err'),l=document.getElementById('loader'); e.textContent=t; if(reload){ var d=document.createElement('div'); d.textContent=t; d.style.cssText='position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;background:#02040a;color:#fff;font:700 18px sans-serif;text-align:center;padding:24px'; d.onclick=function(){location.reload();}; document.body.appendChild(d);} }
+canvas.addEventListener('webglcontextlost',function(e){ e.preventDefault(); gtFail('画面の描画が中断されました。タップすると再読み込みします',true); });
+document.addEventListener('visibilitychange',function(){ if(document.hidden&&window.speechSynthesis) speechSynthesis.cancel(); });
+try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+var config={
+  dataUrl:"Build/Web.data.unityweb",
+  frameworkUrl:"Build/Web.framework.js.unityweb",
+  codeUrl:"Build/Web.wasm.unityweb",
+  streamingAssetsUrl:"StreamingAssets",
+  companyName:"DIP Games",
+  productName:"GRAND TURF",
+  productVersion:"1.0.0",
+  matchWebGLToCanvasSize:true,
+  devicePixelRatio:Math.min(window.devicePixelRatio||1,2)
+};
+var s=document.createElement('script');
+s.src="Build/Web.loader.js";
+s.onerror=function(){ gtFail('読み込みに失敗しました。タップすると再読み込みします',true); };
+s.onload=function(){
+  createUnityInstance(canvas,config,function(p){ document.getElementById('fill').style.width=(p*100)+'%'; document.getElementById('msg').textContent='LOADING… '+Math.round(p*100)+'%'; })
+  .then(function(inst){ window.unityInstance=inst; var l=document.getElementById('loader'); l.style.opacity=0; setTimeout(function(){l.remove();},700); })
+  .catch(function(e){ document.getElementById('err').textContent='起動に失敗しました: '+e; });
+};
+document.body.appendChild(s);
+</script>
+</body>
+</html>
